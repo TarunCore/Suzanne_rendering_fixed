@@ -551,40 +551,62 @@
 
 package com.example.suzanne
 
+
+
 import android.animation.ValueAnimator
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.opengl.Matrix
 import android.os.Bundle
 import android.view.Choreographer
-import android.view.Gravity
 import android.view.Surface
 import android.view.SurfaceView
 import android.view.animation.LinearInterpolator
-import android.widget.FrameLayout
-import android.widget.TextView
 
 import com.google.android.filament.*
-import com.google.android.filament.RenderableManager.*
-import com.google.android.filament.VertexBuffer.*
 import com.google.android.filament.android.DisplayHelper
 import com.google.android.filament.android.FilamentHelper
+import com.google.android.filament.utils.*
 import com.google.android.filament.android.UiHelper
 
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.nio.channels.Channels
-
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
+
+import android.annotation.SuppressLint
+
+import android.opengl.GLES30
+
+import android.util.Log
+import android.view.*
+import android.view.GestureDetector
+import android.widget.TextView
+import android.widget.Toast
+import com.google.android.filament.Fence
+import com.google.android.filament.IndirectLight
+import com.google.android.filament.Skybox
+import com.google.android.filament.View
+import com.google.android.filament.utils.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileInputStream
+import java.io.RandomAccessFile
+import java.net.URI
+import java.nio.Buffer
+
+import java.nio.charset.StandardCharsets
+import java.util.zip.ZipInputStream
+import javax.microedition.khronos.opengles.GL10
+
 class MainActivity : Activity() {
-    // Make sure to initialize Filament first
-    // This loads the JNI library needed by most API calls
+    // Make sure to initialize the correct Filament JNI layer.
     companion object {
         init {
-            Filament.init()
+            Utils.init()
         }
     }
 
@@ -611,11 +633,17 @@ class MainActivity : Activity() {
     private lateinit var camera: Camera
 
     private lateinit var material: Material
-    private lateinit var vertexBuffer: VertexBuffer
-    private lateinit var indexBuffer: IndexBuffer
+    private lateinit var materialInstance: MaterialInstance
+
+    private lateinit var baseColor: Texture
+    private lateinit var normal: Texture
+    private lateinit var aoRoughnessMetallic: Texture
+
+    private lateinit var mesh: Mesh
+    private lateinit var ibl: Ibl
 
     // Filament entity representing a renderable object
-    @Entity private var renderable = 0
+    @Entity private var light = 0
 
     // A swap chain is Filament's representation of a surface
     private var swapChain: SwapChain? = null
@@ -623,33 +651,17 @@ class MainActivity : Activity() {
     // Performs the rendering and schedules new frames
     private val frameScheduler = FrameCallback()
 
-    private val animator = ValueAnimator.ofFloat(0.0f, 360.0f)
+    private val animator = ValueAnimator.ofFloat(0.0f, (2.0 * PI).toFloat())
 
-    @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        surfaceView = SurfaceView(this)
+        setContentView(surfaceView)
 
         choreographer = Choreographer.getInstance()
 
         displayHelper = DisplayHelper(this)
-
-        surfaceView = SurfaceView(this)
-
-        val textView = TextView(this).apply {
-            val d = resources.displayMetrics.density
-            text = "This TextView is under the Filament SurfaceView."
-            textSize = 32.0f
-            setPadding((16 * d).toInt(), 0, (16 * d).toInt(), 0)
-        }
-
-        setContentView(FrameLayout(this).apply {
-            addView(textView, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER_VERTICAL
-            ))
-            addView(surfaceView)
-        })
 
         setupSurfaceView()
         setupFilament()
@@ -661,8 +673,8 @@ class MainActivity : Activity() {
         uiHelper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK)
         uiHelper.renderCallback = SurfaceCallback()
 
-        // Make the render target transparent
-        uiHelper.isOpaque = false
+        // NOTE: To choose a specific rendering resolution, add the following line:
+        // uiHelper.setDesiredSize(1280, 720)
 
         uiHelper.attachTo(surfaceView)
     }
@@ -673,130 +685,129 @@ class MainActivity : Activity() {
         scene = engine.createScene()
         view = engine.createView()
         camera = engine.createCamera(engine.entityManager.create())
-
-        // clear the swapchain with transparent pixels
-        renderer.clearOptions = renderer.clearOptions.apply {
-            clear = true
-        }
     }
 
     private fun setupView() {
+        // NOTE: Try to disable post-processing (tone-mapping, etc.) to see the difference
+        // view.isPostProcessingEnabled = false
+
         // Tell the view which camera we want to use
         view.camera = camera
 
         // Tell the view which scene we want to render
         view.scene = scene
+
+        // Enable dynamic resolution with a default target frame rate of 60fps
+        val options = View.DynamicResolutionOptions()
+        options.enabled = true
+
+        view.dynamicResolutionOptions = options
     }
 
     private fun setupScene() {
         loadMaterial()
-        createMesh()
+        setupMaterial()
+        loadImageBasedLight()
 
-        // To create a renderable we first create a generic entity
-        renderable = EntityManager.get().create()
+        scene.skybox = ibl.skybox
+        scene.indirectLight = ibl.indirectLight
 
-        // We then create a renderable component on that entity
-        // A renderable is made of several primitives; in this case we declare only 1
-        RenderableManager.Builder(1)
-            // Overall bounding box of the renderable
-            .boundingBox(Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.01f))
-            // Sets the mesh data of the first primitive
-            .geometry(0, PrimitiveType.TRIANGLES, vertexBuffer, indexBuffer, 0, 3)
-            // Sets the material of the first primitive
-            .material(0, material.defaultInstance)
-            .build(engine, renderable)
+        // This map can contain named materials that will map to the material names
+        // loaded from the filamesh file. The material called "DefaultMaterial" is
+        // applied when no named material can be found
+        val materials = mapOf("DefaultMaterial" to materialInstance)
+
+        // Load the mesh in the filamesh format (see filamesh tool)
+        mesh = loadMesh(assets, "models/suzanne.filamesh", materials, engine)
+
+        // Move the mesh down
+        // Filament uses column-major matrices
+        engine.transformManager.setTransform(engine.transformManager.getInstance(mesh.renderable),
+            floatArrayOf(
+                1.0f,  0.0f, 0.0f, 0.0f,
+                0.0f,  1.0f, 0.0f, 0.0f,
+                0.0f,  0.0f, 1.0f, 0.0f,
+                0.0f, -1.2f, 0.0f, 1.0f
+            ))
 
         // Add the entity to the scene to render it
-        scene.addEntity(renderable)
+        scene.addEntity(mesh.renderable)
+
+        // We now need a light, let's create a directional light
+        light = EntityManager.get().create()
+
+        // Create a color from a temperature (D65)
+        val (r, g, b) = Colors.cct(6_500.0f)
+        LightManager.Builder(LightManager.Type.DIRECTIONAL)
+            .color(r, g, b)
+            // Intensity of the sun in lux on a clear day
+            .intensity(110_000.0f)
+            // The direction is normalized on our behalf
+            .direction(-0.753f, -1.0f, 0.890f)
+            .castShadows(true)
+            .build(engine, light)
+
+        // Add the entity to the scene to light it
+        scene.addEntity(light)
+
+        // Set the exposure on the camera, this exposure follows the sunny f/16 rule
+        // Since we've defined a light that has the same intensity as the sun, it
+        // guarantees a proper exposure
+        camera.setExposure(16.0f, 1.0f / 125.0f, 100.0f)
 
         startAnimation()
     }
 
     private fun loadMaterial() {
-        readUncompressedAsset("materials/baked_color.filamat").let {
+        readUncompressedAsset("materials/textured_pbr.filamat").let {
             material = Material.Builder().payload(it, it.remaining()).build(engine)
         }
     }
 
-    private fun createMesh() {
-        val intSize = 4
-        val floatSize = 4
-        val shortSize = 2
-        // A vertex is a position + a color:
-        // 3 floats for XYZ position, 1 integer for color
-        val vertexSize = 3 * floatSize + intSize
+    private fun setupMaterial() {
+        // Create an instance of the material to set different parameters on it
+        materialInstance = material.createInstance()
 
-        // Define a vertex and a function to put a vertex in a ByteBuffer
-        data class Vertex(val x: Float, val y: Float, val z: Float, val color: Int)
-        fun ByteBuffer.put(v: Vertex): ByteBuffer {
-            putFloat(v.x)
-            putFloat(v.y)
-            putFloat(v.z)
-            putInt(v.color)
-            return this
+        // Note that the textures are stored in drawable-nodpi to prevent the system
+        // from automatically resizing them based on the display's density
+        baseColor = loadTexture(engine, resources, R.drawable.floor_basecolor, TextureType.COLOR)
+        normal = loadTexture(engine, resources, R.drawable.floor_normal, TextureType.NORMAL)
+        aoRoughnessMetallic = loadTexture(engine, resources,
+            R.drawable.floor_ao_roughness_metallic, TextureType.DATA)
+
+        // A texture sampler does not need to be kept around or destroyed
+        val sampler = TextureSampler()
+        sampler.anisotropy = 8.0f
+
+        materialInstance.setParameter("baseColor", baseColor, sampler)
+        materialInstance.setParameter("normal", normal, sampler)
+        materialInstance.setParameter("aoRoughnessMetallic", aoRoughnessMetallic, sampler)
+    }
+
+    private fun loadImageBasedLight() {
+        val engine = modelViewer.engine
+        val scene = modelViewer.scene
+        val ibl = "venetian_crossroads_2k"
+        readCompressedAsset("envs/$ibl/${ibl}_ibl.ktx").let {
+            scene.indirectLight = KTX1Loader.createIndirectLight(engine, it)
+            scene.indirectLight!!.intensity = 30_000.0f
+            viewerContent.indirectLight = modelViewer.scene.indirectLight
         }
-
-        // We are going to generate a single triangle
-        val vertexCount = 3
-        val a1 = PI * 2.0 / 3.0
-        val a2 = PI * 4.0 / 3.0
-
-        val vertexData = ByteBuffer.allocate(vertexCount * vertexSize)
-            // It is important to respect the native byte order
-            .order(ByteOrder.nativeOrder())
-            .put(Vertex(1.0f,              0.0f,              0.0f, 0xffff0000.toInt()))
-            .put(Vertex(cos(a1).toFloat(), sin(a1).toFloat(), 0.0f, 0xff00ff00.toInt()))
-            .put(Vertex(cos(a2).toFloat(), sin(a2).toFloat(), 0.0f, 0xff0000ff.toInt()))
-            // Make sure the cursor is pointing in the right place in the byte buffer
-            .flip()
-
-        // Declare the layout of our mesh
-        vertexBuffer = VertexBuffer.Builder()
-            .bufferCount(1)
-            .vertexCount(vertexCount)
-            // Because we interleave position and color data we must specify offset and stride
-            // We could use de-interleaved data by declaring two buffers and giving each
-            // attribute a different buffer index
-            .attribute(VertexAttribute.POSITION, 0, AttributeType.FLOAT3, 0,             vertexSize)
-            .attribute(VertexAttribute.COLOR,    0, AttributeType.UBYTE4, 3 * floatSize, vertexSize)
-            // We store colors as unsigned bytes but since we want values between 0 and 1
-            // in the material (shaders), we must mark the attribute as normalized
-            .normalized(VertexAttribute.COLOR)
-            .build(engine)
-
-        // Feed the vertex data to the mesh
-        // We only set 1 buffer because the data is interleaved
-        vertexBuffer.setBufferAt(engine, 0, vertexData)
-
-        // Create the indices
-        val indexData = ByteBuffer.allocate(vertexCount * shortSize)
-            .order(ByteOrder.nativeOrder())
-            .putShort(0)
-            .putShort(1)
-            .putShort(2)
-            .flip()
-
-        indexBuffer = IndexBuffer.Builder()
-            .indexCount(3)
-            .bufferType(IndexBuffer.Builder.IndexType.USHORT)
-            .build(engine)
-        indexBuffer.setBuffer(engine, indexData)
+        readCompressedAsset("envs/$ibl/${ibl}_skybox.ktx").let {
+            scene.skybox = KTX1Loader.createSkybox(engine, it)
+        }
     }
 
     private fun startAnimation() {
         // Animate the triangle
         animator.interpolator = LinearInterpolator()
-        animator.duration = 4000
+        animator.duration = 18_000
         animator.repeatMode = ValueAnimator.RESTART
         animator.repeatCount = ValueAnimator.INFINITE
-        animator.addUpdateListener(object : ValueAnimator.AnimatorUpdateListener {
-            val transformMatrix = FloatArray(16)
-            override fun onAnimationUpdate(a: ValueAnimator) {
-                Matrix.setRotateM(transformMatrix, 0, -(a.animatedValue as Float), 0.0f, 0.0f, 1.0f)
-                val tcm = engine.transformManager
-                tcm.setTransform(tcm.getInstance(renderable), transformMatrix)
-            }
-        })
+        animator.addUpdateListener { a ->
+            val v = (a.animatedValue as Float)
+            camera.lookAt(cos(v) * 5.5, 1.5, sin(v) * 5.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        }
         animator.start()
     }
 
@@ -823,10 +834,14 @@ class MainActivity : Activity() {
         uiHelper.detach()
 
         // Cleanup all resources
-        engine.destroyEntity(renderable)
+        destroyMesh(engine, mesh)
+        destroyIbl(engine, ibl)
+        engine.destroyTexture(baseColor)
+        engine.destroyTexture(normal)
+        engine.destroyTexture(aoRoughnessMetallic)
+        engine.destroyEntity(light)
         engine.destroyRenderer(renderer)
-        engine.destroyVertexBuffer(vertexBuffer)
-        engine.destroyIndexBuffer(indexBuffer)
+        engine.destroyMaterialInstance(materialInstance)
         engine.destroyMaterial(material)
         engine.destroyView(view)
         engine.destroyScene(scene)
@@ -835,7 +850,7 @@ class MainActivity : Activity() {
         // Engine.destroyEntity() destroys Filament related resources only
         // (components), not the entity itself
         val entityManager = EntityManager.get()
-        entityManager.destroy(renderable)
+        entityManager.destroy(light)
         entityManager.destroy(camera.entity)
 
         // Destroying the engine will free up any resource you may have forgotten
@@ -863,7 +878,7 @@ class MainActivity : Activity() {
     inner class SurfaceCallback : UiHelper.RendererCallback {
         override fun onNativeWindowChanged(surface: Surface) {
             swapChain?.let { engine.destroySwapChain(it) }
-            swapChain = engine.createSwapChain(surface, uiHelper.swapChainFlags)
+            swapChain = engine.createSwapChain(surface)
             displayHelper.attach(renderer, surfaceView.display)
         }
 
@@ -880,10 +895,8 @@ class MainActivity : Activity() {
         }
 
         override fun onResized(width: Int, height: Int) {
-            val zoom = 1.5
             val aspect = width.toDouble() / height.toDouble()
-            camera.setProjection(Camera.Projection.ORTHO,
-                -aspect * zoom, aspect * zoom, -zoom, zoom, 0.0, 10.0)
+            camera.setProjection(45.0, aspect, 0.1, 20.0, Camera.Fov.VERTICAL)
 
             view.viewport = Viewport(0, 0, width, height)
 
@@ -891,7 +904,6 @@ class MainActivity : Activity() {
         }
     }
 
-    @Suppress("SameParameterValue")
     private fun readUncompressedAsset(assetName: String): ByteBuffer {
         assets.openFd(assetName).use { fd ->
             val input = fd.createInputStream()
