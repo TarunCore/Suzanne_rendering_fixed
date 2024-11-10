@@ -9,6 +9,7 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        maven { url = uri("https://github.com/google/filament.git")}
     }
 }
 dependencyResolutionManagement {
