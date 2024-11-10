@@ -574,33 +574,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 
-import android.annotation.SuppressLint
-
-import android.opengl.GLES30
-
-import android.util.Log
-import android.view.*
-import android.view.GestureDetector
-import android.widget.TextView
-import android.widget.Toast
-import com.google.android.filament.Fence
-import com.google.android.filament.IndirectLight
-import com.google.android.filament.Skybox
 import com.google.android.filament.View
-import com.google.android.filament.utils.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileInputStream
-import java.io.RandomAccessFile
-import java.net.URI
-import java.nio.Buffer
-
-import java.nio.charset.StandardCharsets
-import java.util.zip.ZipInputStream
-import javax.microedition.khronos.opengles.GL10
 
 class MainActivity : Activity() {
     // Make sure to initialize the correct Filament JNI layer.
@@ -785,17 +759,31 @@ class MainActivity : Activity() {
     }
 
     private fun loadImageBasedLight() {
-        val engine = modelViewer.engine
-        val scene = modelViewer.scene
-        val ibl = "venetian_crossroads_2k"
-        readCompressedAsset("envs/$ibl/${ibl}_ibl.ktx").let {
-            scene.indirectLight = KTX1Loader.createIndirectLight(engine, it)
-            scene.indirectLight!!.intensity = 30_000.0f
-            viewerContent.indirectLight = modelViewer.scene.indirectLight
-        }
-        readCompressedAsset("envs/$ibl/${ibl}_skybox.ktx").let {
-            scene.skybox = KTX1Loader.createSkybox(engine, it)
-        }
+        ibl = loadIbl(assets, "envs/flower_road_no_sun_2k", engine)
+        ibl.indirectLight.intensity = 40_000.0f
+//        val engine = modelViewer.engine
+//        val scene = modelViewer.scene
+//        val ibl = "venetian_crossroads_2k"
+//        readCompressedAsset("envs/$ibl/${ibl}_ibl.ktx").let {
+//            scene.indirectLight = KTX1Loader.createIndirectLight(engine, it)
+//            scene.indirectLight!!.intensity = 30_000.0f
+//            viewerContent.indirectLight = modelViewer.scene.indirectLight
+//        }
+//        readCompressedAsset("envs/$ibl/${ibl}_skybox.ktx").let {
+//            scene.skybox = KTX1Loader.createSkybox(engine, it)
+//        }
+    }
+
+    private fun readCompressedAsset(assetName: String): ByteBuffer {
+        // NOT USED ANYWAYS --gradle file fixed for compression issue
+//        BELOW IS FROM GPT. 2ND SOURCE ABOVE COMMENTED CODE
+            assets.open(assetName).use { inputStream ->
+                val dst = ByteBuffer.allocate(inputStream.available())
+                val src = Channels.newChannel(inputStream)
+                src.read(dst)
+                src.close()
+                return dst.apply { rewind() }
+            }
     }
 
     private fun startAnimation() {
