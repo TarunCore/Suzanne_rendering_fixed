@@ -567,6 +567,7 @@ import com.google.android.filament.android.FilamentHelper
 import com.google.android.filament.utils.*
 import com.google.android.filament.android.UiHelper
 
+
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import kotlin.math.PI
@@ -733,7 +734,7 @@ class MainActivity : Activity() {
     }
 
     private fun loadMaterial() {
-        readUncompressedAsset("materials/textured_pbr.filamat").let {
+        readUncompressedAsset("materials/textured_pbr_sub.filamat").let {
             material = Material.Builder().payload(it, it.remaining()).build(engine)
         }
     }
@@ -742,36 +743,36 @@ class MainActivity : Activity() {
         // Create an instance of the material to set different parameters on it
         materialInstance = material.createInstance()
 
-        // Note that the textures are stored in drawable-nodpi to prevent the system
-        // from automatically resizing them based on the display's density
-        baseColor = loadTexture(engine, resources, R.drawable.floor_basecolor, TextureType.COLOR)
-        normal = loadTexture(engine, resources, R.drawable.floor_normal, TextureType.NORMAL)
-        aoRoughnessMetallic = loadTexture(engine, resources,
-            R.drawable.floor_ao_roughness_metallic, TextureType.DATA)
+        // TRYING TRANSPARENCY EFFECT
+        // textured_pbr_sub.mat FILE parameters
+        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 0.5f, 0.85f, 1f )
+        materialInstance.setParameter("subsurfacePower", 12.234f)
+        materialInstance.setParameter("subsurfaceColor", Colors.RgbType.SRGB, 1f, 0.5f,0f)
+        materialInstance.setParameter("roughness", 0.5f)                    // Roughness value (float)
+        materialInstance.setParameter("metallic", 0.0f)                     // Metallic value (float)
+        materialInstance.setParameter("reflectance", 0.04f)                 // Reflectance value (float)
+        materialInstance.setParameter("thickness", 0.1f)
+        materialInstance.setParameter("opacity", 0.7f)
+        materialInstance.setParameter("emissive", Colors.RgbaType.SRGB, 0f,0f,1f,0f)
 
-        // A texture sampler does not need to be kept around or destroyed
-        val sampler = TextureSampler()
-        sampler.anisotropy = 8.0f
+        // TEXTURE IMPLEMENTATION BELOW, DON'T REMOVE
 
-        materialInstance.setParameter("baseColor", baseColor, sampler)
-        materialInstance.setParameter("normal", normal, sampler)
-        materialInstance.setParameter("aoRoughnessMetallic", aoRoughnessMetallic, sampler)
+// Note that the textures are stored in drawable-nodpi to prevent the system
+// from automatically resizing them based on the display's density
+//        baseColor = loadTexture(engine, resources, R.drawable.floor_basecolor, TextureType.COLOR)
+//        normal = loadTexture(engine, resources, R.drawable.floor_normal, TextureType.NORMAL)
+//        aoRoughnessMetallic = loadTexture(engine, resources,
+//            R.drawable.floor_ao_roughness_metallic, TextureType.DATA) // A texture sampler does not need to be kept around or destroyed
+//        val sampler = TextureSampler()
+//        sampler.anisotropy = 8.0f
+//        materialInstance.setParameter("baseColor", baseColor, sampler)
+//        materialInstance.setParameter("emissive", Color(0f,0f,0f)) //        materialInstance.setParameter("normal", normal, sampler)
+//        materialInstance.setParameter("aoRoughnessMetallic", aoRoughnessMetallic, sampler)
     }
 
     private fun loadImageBasedLight() {
         ibl = loadIbl(assets, "envs/flower_road_no_sun_2k", engine)
         ibl.indirectLight.intensity = 40_000.0f
-//        val engine = modelViewer.engine
-//        val scene = modelViewer.scene
-//        val ibl = "venetian_crossroads_2k"
-//        readCompressedAsset("envs/$ibl/${ibl}_ibl.ktx").let {
-//            scene.indirectLight = KTX1Loader.createIndirectLight(engine, it)
-//            scene.indirectLight!!.intensity = 30_000.0f
-//            viewerContent.indirectLight = modelViewer.scene.indirectLight
-//        }
-//        readCompressedAsset("envs/$ibl/${ibl}_skybox.ktx").let {
-//            scene.skybox = KTX1Loader.createSkybox(engine, it)
-//        }
     }
 
     private fun readCompressedAsset(assetName: String): ByteBuffer {
