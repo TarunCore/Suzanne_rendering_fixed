@@ -795,7 +795,7 @@ class MainActivity : Activity() {
         animator.repeatCount = ValueAnimator.INFINITE
         animator.addUpdateListener { a ->
             val v = (a.animatedValue as Float)
-            camera.lookAt(cos(v) * 5.5, 1.5, sin(v) * 5.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+            camera.lookAt(cos(v) * 7.5, -1.0, sin(v) * 7.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
         }
         animator.start()
     }
