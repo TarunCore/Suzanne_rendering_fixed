@@ -1,11 +1,13 @@
 material {
-    name : Subsurface,
-    shadingModel : subsurface,
-    transparency : twoPassesOneSide,
-    blending: transparent,
-    depthWrite: false,
-    culling: none,
+    name : SolidRefractionScreenSpaceWithSSS,
+    shadingModel : lit,
+    refractionType : solid,
+    refractionMode : screenspace,
     parameters : [
+        {
+            type : float,
+            name : alpha
+        },
         {
             type : float3,
             name : baseColor
@@ -19,8 +21,28 @@ material {
             name : metallic
         },
         {
+            type : float3,
+            name : sheenColor
+        },
+        {
             type : float,
-            name : reflectance
+            name : sheenRoughness
+        },
+        {
+            type : float,
+            name : clearCoat
+        },
+        {
+            type : float,
+            name : clearCoatRoughness
+        },
+        {
+            type : float,
+            name : anisotropy
+        },
+        {
+            type : float3,
+            name : absorption
         },
         {
             type : float,
@@ -28,36 +50,56 @@ material {
         },
         {
             type : float,
-            name : subsurfacePower
+            name : ior
         },
         {
-            type : float3,
-            name : subsurfaceColor
+            type : float,
+            name : transmission
         },
         {
             type : float4,
             name : emissive
         },
         {
+            type : float3,
+            name : subsurfaceColor
+        },
+        {
             type : float,
-            name : opacity
+            name : subsurfaceStrength
+        },
+        {
+            type : float,
+            name : subsurfaceRadius
         }
     ],
-    specularAntiAliasing : true,
+    specularAntiAliasing : true
 }
 
 fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
-        material.baseColor.a = materialParams.opacity;
-        material.baseColor.rgb = materialParams.baseColor;
+
+        material.baseColor.rgb = materialParams.baseColor * materialParams.alpha;
+        material.baseColor.a = materialParams.alpha;
         material.roughness = materialParams.roughness;
         material.metallic = materialParams.metallic;
-        material.reflectance = materialParams.reflectance;
+        material.sheenColor = materialParams.sheenColor;
+        material.sheenRoughness = materialParams.sheenRoughness;
+        material.clearCoat = materialParams.clearCoat;
+        material.clearCoatRoughness = materialParams.clearCoatRoughness;
+        material.anisotropy = materialParams.anisotropy;
+        material.absorption = materialParams.absorption;
         material.thickness = materialParams.thickness;
-        material.subsurfacePower = materialParams.subsurfacePower;
-        material.subsurfaceColor = materialParams.subsurfaceColor;
+        material.ior = materialParams.ior;
+        material.transmission = materialParams.transmission;
         material.emissive = materialParams.emissive;
 
+        float scatter = clamp(materialParams.subsurfaceStrength, 0.0, 1.0);
+        float radius = materialParams.subsurfaceRadius;
+        float3 sssColor = materialParams.subsurfaceColor;
+
+        float thicknessFactor = clamp(material.thickness * scatter, 0.0, 1.0);
+        material.baseColor.rgb = mix(material.baseColor.rgb, sssColor, thicknessFactor * radius);
     }
 }

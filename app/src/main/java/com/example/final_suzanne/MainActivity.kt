@@ -718,7 +718,7 @@ class MainActivity : Activity() {
             // Intensity of the sun in lux on a clear day
             .intensity(110_000.0f)
             // The direction is normalized on our behalf
-            .direction(-0.753f, -1.0f, 0.890f)
+            .direction(0f, 1f, 0f)
             .castShadows(true)
             .build(engine, light)
 
@@ -743,17 +743,76 @@ class MainActivity : Activity() {
         // Create an instance of the material to set different parameters on it
         materialInstance = material.createInstance()
 
+
         // TRYING TRANSPARENCY EFFECT
         // textured_pbr_sub.mat FILE parameters
-        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 0.5f, 0.85f, 1f )
-        materialInstance.setParameter("subsurfacePower", 12.234f)
-        materialInstance.setParameter("subsurfaceColor", Colors.RgbType.SRGB, 1f, 0.5f,0f)
-        materialInstance.setParameter("roughness", 0.5f)                    // Roughness value (float)
-        materialInstance.setParameter("metallic", 0.0f)                     // Metallic value (float)
-        materialInstance.setParameter("reflectance", 0.04f)                 // Reflectance value (float)
-        materialInstance.setParameter("thickness", 0.1f)
-        materialInstance.setParameter("opacity", 0.7f)
-        materialInstance.setParameter("emissive", Colors.RgbaType.SRGB, 0f,0f,1f,0f)
+//        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 1f, 0.5f, 0.0f); // Bright orange to match reference
+//        materialInstance.setParameter("subsurfacePower", 1.0f); // Lower to make scattering softer and more noticeable
+//        materialInstance.setParameter("subsurfaceColor", Colors.RgbType.SRGB, 1f, 0.5f, 0.3f); // Similar to baseColor for a cohesive look
+//        materialInstance.setParameter("roughness", 0.1f); // Very smooth surface for clearer scattering and reflections
+//        materialInstance.setParameter("metallic", 0.0f); // Non-metallic
+//        materialInstance.setParameter("reflectance", 0.1f); // Increase to make the surface more reflective
+//        materialInstance.setParameter("thickness", 1.5f); // Higher thickness to enhance depth of scattering
+//        materialInstance.setParameter("opacity", 0.85f); // Slightly more transparent to allow light penetration
+//        materialInstance.setParameter("emissive", Colors.RgbaType.SRGB, 0f, 0f, 0f, 0f); // No emissive effect
+
+
+
+//        materialInstance.setParameter("alpha", 0.85f); // Slightly transparent for subsurface scattering effect
+//        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 1f, 0.6f, 0.3f); // Warm orange color for a translucent look
+//        materialInstance.setParameter("roughness", 0.1f); // Smooth surface for strong reflections
+//        materialInstance.setParameter("metallic", 0.0f); // Non-metallic surface
+//        materialInstance.setParameter("sheenColor", Colors.RgbType.SRGB, 0.9f, 0.5f, 0.3f); // Slight sheen in a warm tone to complement baseColor
+//        materialInstance.setParameter("sheenRoughness", 0.2f); // Low roughness for a subtle sheen effect
+//        materialInstance.setParameter("clearCoat", 0.5f); // Mid-level clear coat for a glossy finish
+//        materialInstance.setParameter("clearCoatRoughness", 0.05f); // Very smooth clear coat surface
+//        materialInstance.setParameter("anisotropy", 0.3f); // Slight anisotropy for varied reflection
+//        materialInstance.setParameter("absorption", Colors.RgbType.SRGB, 0.7f, 0.4f, 0.2f); // Light absorption in warm tones to simulate scattering depth
+//        materialInstance.setParameter("thickness", 1.0f); // Higher thickness for increased scattering
+//        materialInstance.setParameter("ior", 1.5f); // Index of Refraction close to glass/plastic for realistic refraction
+//        materialInstance.setParameter("transmission", 0.95f); // High transmission to allow light to pass through for subsurface effect
+//        materialInstance.setParameter("emissive", Colors.RgbaType.SRGB, 0f, 0f, 0f, 0f); // No emissive effect
+
+
+//        samples/materials/sandboxLitThinRefractionSsr.mat
+//        materialInstance.setParameter("alpha", 0.8f); // Semi-transparent to enhance thin refraction effect
+//        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 1.0f, 0.6f, 0.3f); // Warm orange color for a translucent effect
+//        materialInstance.setParameter("roughness", 0.05f); // Very smooth surface for strong, clear reflections
+//        materialInstance.setParameter("metallic", 0.0f); // Non-metallic for glass-like transparency
+//        materialInstance.setParameter("sheenColor", Colors.RgbType.SRGB, 0.9f, 0.5f, 0.3f); // Slight sheen to complement the baseColor
+//        materialInstance.setParameter("sheenRoughness", 0.1f); // Low sheen roughness for subtle highlights
+//        materialInstance.setParameter("clearCoat", 0.6f); // Medium clear coat for glossy finish
+//        materialInstance.setParameter("clearCoatRoughness", 0.02f); // Very smooth clear coat for high glossiness
+//        materialInstance.setParameter("anisotropy", 0.2f); // Slight anisotropy for varied light reflection
+//        materialInstance.setParameter("absorption", Colors.RgbType.SRGB, 0.6f, 0.4f, 0.2f); // Warm absorption color to simulate light passing through thin material
+//        materialInstance.setParameter("thickness", 0.05f); // Very thin thickness to support thin refraction
+//        materialInstance.setParameter("ior", 1.3f); // Slightly lower IOR for thin glass or plastic effect
+//        materialInstance.setParameter("transmission", 0.95f); // High transmission to allow light to pass through
+//        materialInstance.setParameter("emissive", Colors.RgbaType.SRGB, 0f, 0f, 0f, 0f); // No emissive effect
+
+        // ANUJAA TRIED
+        materialInstance.setParameter("alpha", 0.9f); // High transparency, allowing SSS effect to be visible
+        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 1.0f, 0.8f, 0.6f); // Light skin-like tone for subsurface effect
+        materialInstance.setParameter("roughness", 0.3f); // Slightly rough surface for a soft look
+        materialInstance.setParameter("metallic", 0.0f); // Non-metallic for a natural, organic appearance
+        materialInstance.setParameter("sheenColor", Colors.RgbType.SRGB, 1.0f, 0.9f, 0.8f); // Warm sheen to complement base color
+        materialInstance.setParameter("sheenRoughness", 0.2f); // Low sheen roughness for soft highlights
+        materialInstance.setParameter("clearCoat", 0.5f); // Moderate clear coat for a glossy surface
+        materialInstance.setParameter("clearCoatRoughness", 0.05f); // Smooth clear coat for enhanced glossiness
+        materialInstance.setParameter("anisotropy", 0.1f); // Low anisotropy for subtle directional reflection
+        materialInstance.setParameter("absorption", Colors.RgbType.SRGB, 0.6f, 0.35f, 0.2f); // Warm absorption color for depth
+        materialInstance.setParameter("thickness", 0.6f); // Medium thickness for noticeable scattering
+        materialInstance.setParameter("ior", 1.4f); // Typical value for materials with some depth like skin or wax
+        materialInstance.setParameter("transmission", 1f); // Allows more light to pass through for SSS
+        materialInstance.setParameter("emissive", Colors.RgbaType.SRGB, 0f, 0f, 0f, 0f); // No emissive effect
+//
+//// Subsurface scattering parameters
+        materialInstance.setParameter("subsurfaceColor", Colors.RgbType.SRGB, 1.0f, 0.6f, 0.5f); // Soft reddish color for natural SSS
+        materialInstance.setParameter("subsurfaceStrength", 0.9f); // High strength for noticeable SSS effect
+        materialInstance.setParameter("subsurfaceRadius", 0.6f); // Medium radius for balanced scattering
+
+
+
 
         // TEXTURE IMPLEMENTATION BELOW, DON'T REMOVE
 
